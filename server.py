@@ -124,8 +124,57 @@ def unique_path(folder, name):
     return p
 
 
-def pick_dialog_main(initial):
-    """รันใน process แยก (--pick): เปิดหน้าต่างเลือกโฟลเดอร์ของ Windows แล้วพิมพ์ path ออก stdout
+def startup_link():
+    """ที่อยู่ไฟล์ทางลัดในโฟลเดอร์ Startup ของผู้ใช้ (ไม่ต้องสิทธิ์ admin) — ตั้ง DOCSCAN_STARTUP_DIR เพื่อทดสอบ"""
+    d = os.environ.get('DOCSCAN_STARTUP_DIR') or os.path.join(os.environ.get('APPDATA') or os.path.expanduser('~'),
+                                                              'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup')
+    return os.path.join(d, 'DocScan.lnk')
+
+
+def _ps(cmd):
+    r = subprocess.run(['powershell', '-NoProfile', '-NonInteractive', '-Command', cmd], capture_output=True, timeout=30,
+                       creationflags=0x08000000)
+    return r.returncode, (r.stdout or b'').decode('utf-8', 'replace').strip(), (r.stderr or b'').decode('utf-8', 'replace').strip()
+
+
+def autostart_state():
+    """{'available': ทำได้ไหม (ต้องรันจาก DocScan.exe), 'enabled': เปิดอยู่ไหม, 'exe': ที่อยู่โปรแกรม}"""
+    lnk = startup_link()
+    st = {'available': FROZEN, 'enabled': os.path.exists(lnk), 'exe': sys.executable if FROZEN else ''}
+    if st['enabled'] and FROZEN:
+        try:   # ทางลัดเก่าที่ชี้ไปที่อื่น (ย้าย/ลบ exe แล้ว) ถือว่าไม่ตรง — ให้หน้า admin เตือน
+            rc, out, _ = _ps("(New-Object -ComObject WScript.Shell).CreateShortcut('%s').TargetPath" % lnk.replace("'", "''"))
+            st['target_ok'] = (rc == 0 and os.path.normcase(out) == os.path.normcase(sys.executable))
+        except Exception:
+            st['target_ok'] = True
+    return st
+
+
+def autostart_set(enable):
+    lnk = startup_link()
+    if not enable:
+        try:
+            os.remove(lnk)
+        except FileNotFoundError:
+            pass
+        return True, ''
+    if not FROZEN:
+        return False, 'ใช้ได้เฉพาะเมื่อเปิดจาก DocScan.exe'
+    os.makedirs(os.path.dirname(lnk), exist_ok=True)
+    exe = sys.executable
+    q = lambda t: t.replace("'", "''")
+    # WindowStyle 7 = เปิดแบบย่อหน้าต่าง (ไม่เด้งจอดำขึ้นมาตอนเปิดเครื่อง), --startup = ไม่เปิดเบราว์เซอร์
+    cmd = ("$s=(New-Object -ComObject WScript.Shell).CreateShortcut('%s'); $s.TargetPath='%s'; $s.Arguments='--startup'; "
+           "$s.WorkingDirectory='%s'; $s.WindowStyle=7; $s.Description='DocScan'; $s.Save()") % (q(lnk), q(exe), q(os.path.dirname(exe)))
+    rc, out, err = _ps(cmd)
+    if rc != 0 or not os.path.exists(lnk):
+        return False, err or 'สร้างทางลัดไม่สำเร็จ'
+    return True, ''
+
+
+def pick_dialog_main(initial, outfile):
+    """รันใน process แยก (--pick): เปิดหน้าต่างเลือกโฟลเดอร์ของ Windows แล้วเขียน path ลงไฟล์ outfile
+    (exe แบบไม่มีหน้าต่างคอนโซลไม่มี stdout ให้ใช้ จึงส่งผลทางไฟล์)
     ปัญหาที่เจอ: process ที่ถูกเรียกจากเบื้องหลัง Windows ไม่ยอมให้ขึ้นหน้าสุด หน้าต่างเลยซ่อนอยู่หลังเบราว์เซอร์
     → จำลองการกดปุ่ม Alt (ปลดล็อกสิทธิ์ขึ้นหน้าสุด) + ให้หน้าต่างเจ้าของเป็น topmost ไร้ขอบโปร่งใส แล้วค่อยเปิด dialog"""
     import tkinter as tk
@@ -138,19 +187,43 @@ def pick_dialog_main(initial):
     r = tk.Tk()
     r.overrideredirect(True); r.geometry('1x1+0+0'); r.attributes('-alpha', 0.0); r.attributes('-topmost', True)
     r.update(); r.lift(); r.focus_force()
-    d = filedialog.askdirectory(parent=r, initialdir=initial, title='เลือกโฟลเดอร์ที่จะเก็บไฟล์สแกน')
+    title = 'เลือกโฟลเดอร์ที่จะเก็บไฟล์สแกน'
+
+    def force_front():   # dialog โผล่แล้ว → ดันให้เป็นหน้าต่างที่ active (แนบ input thread ของหน้าต่างที่ active อยู่ชั่วคราว)
+        try:
+            import ctypes
+            u = ctypes.windll.user32
+            h = u.FindWindowW(None, title)
+            if h:
+                fg = u.GetForegroundWindow()
+                t_fg = u.GetWindowThreadProcessId(fg, None); t_me = ctypes.windll.kernel32.GetCurrentThreadId()
+                if t_fg and t_fg != t_me: u.AttachThreadInput(t_me, t_fg, True)
+                u.keybd_event(0x12, 0, 0, 0); u.keybd_event(0x12, 0, 2, 0)
+                u.ShowWindow(h, 9); u.BringWindowToTop(h); u.SetForegroundWindow(h)
+                if t_fg and t_fg != t_me: u.AttachThreadInput(t_me, t_fg, False)
+        except Exception:
+            pass
+    r.after(250, force_front); r.after(900, force_front)
+    d = filedialog.askdirectory(parent=r, initialdir=initial, title=title)
     r.destroy()
-    sys.stdout.buffer.write((d or '').encode('utf-8'))
+    with open(outfile, 'w', encoding='utf-8') as f:
+        f.write(d or '')
 
 
 def pick_folder_dialog(initial):
     """เปิดหน้าต่างเลือกโฟลเดอร์ของ Windows บนคอม (รันเป็น process แยกเพื่อไม่ค้างเซิร์ฟเวอร์)"""
-    cmd = [sys.executable, '--pick', initial] if FROZEN else [sys.executable, os.path.abspath(__file__), '--pick', initial]
+    import tempfile
+    fd, outfile = tempfile.mkstemp(prefix='docscan_pick_', suffix='.txt'); os.close(fd)
+    cmd = [sys.executable, '--pick', initial, outfile] if FROZEN else [sys.executable, os.path.abspath(__file__), '--pick', initial, outfile]
     try:
-        out = subprocess.run(cmd, capture_output=True, timeout=300)
-        return (out.stdout or b'').decode('utf-8', 'replace').strip()
+        subprocess.run(cmd, timeout=300)
+        with open(outfile, encoding='utf-8') as f:
+            return f.read().strip()
     except Exception:
         return ''
+    finally:
+        try: os.remove(outfile)
+        except Exception: pass
 
 
 def qr_svg(text):
@@ -179,6 +252,10 @@ button.sec{background:#fff;color:#13201d;border:1.5px solid #dbe3e0}.mut{color:#
 <div class="card"><b>โฟลเดอร์ที่เก็บไฟล์บนคอมเครื่องนี้</b>
 <input type="text" id="dir"><button onclick="setDir()">บันทึกโฟลเดอร์นี้</button> <button class="sec" onclick="pick()">📁 เลือกโฟลเดอร์…</button> <button class="sec" onclick="openDir()">📂 เปิดโฟลเดอร์</button>
 <div id="msg" class="mut"></div><div id="cloud" class="mut" style="display:none;color:#b45309">⚠ โฟลเดอร์นี้อยู่ใน OneDrive — ไฟล์สแกนจะถูกซิงก์ขึ้นคลาวด์ด้วย (ถ้าไม่ต้องการ ให้เลือกโฟลเดอร์นอก OneDrive)</div></div>
+<div class="card" id="autocard"><label style="display:flex;gap:10px;align-items:flex-start;cursor:pointer"><input type="checkbox" id="auto" onchange="setAuto()" style="width:20px;height:20px;margin-top:2px">
+<span><b>เปิด DocScan อัตโนมัติเมื่อเปิดเครื่อง</b><br><span class="mut">จะรันแบบย่อหน้าต่างไว้เบื้องหลัง ไม่ต้องมาดับเบิลคลิกทุกครั้ง (ย้ายไฟล์ DocScan.exe ไปไว้โฟลเดอร์ถาวรก่อนเปิดใช้ เช่น โฟลเดอร์ DocScan ในไดรฟ์ C — อย่าวางไว้ใน Downloads)</span></span></label>
+<div id="automsg" class="mut" style="margin-top:6px"></div></div>
+<div class="card"><button class="sec" onclick="quitApp()" style="margin-top:0">⏻ ปิดโปรแกรม DocScan</button> <span class="mut">โปรแกรมทำงานอยู่เบื้องหลัง (ไม่มีหน้าต่าง) — ปิดได้จากปุ่มนี้</span></div>
 <div class="card"><b>เปิดบน iPhone (Wi-Fi เดียวกับคอม)</b>
 <p class="mut">สแกน QR นี้ด้วยกล้อง iPhone หรือพิมพ์ลิงก์ด้านล่างใน Safari แล้วกด “เพิ่มไปยังหน้าจอโฮม” เพื่อเปิดใช้งานได้สะดวก</p>
 <div id="qr" style="margin:10px 0"></div><div id="url"></div>
@@ -191,10 +268,17 @@ async function post(path,body){ var r=await fetch(path,{method:'POST',headers:{'
 async function setDir(){ var j=await post('/admin/setdir',{dir:document.getElementById('dir').value}); document.getElementById('msg').textContent=j.ok?('✅ บันทึกแล้ว: '+j.dir):('❌ '+j.error); if(j.ok) load(); }
 async function openDir(){ var j=await post('/admin/open'); if(!j.ok) document.getElementById('msg').textContent='❌ เปิดโฟลเดอร์ไม่ได้: '+j.error; }
 async function pick(){ document.getElementById('msg').textContent='กำลังเปิดหน้าต่างเลือกโฟลเดอร์บนคอม…'; var j=await post('/admin/pick'); if(j.ok&&j.dir){ document.getElementById('dir').value=j.dir; setDir(); } else document.getElementById('msg').textContent=j.ok?'ยกเลิกการเลือก':('❌ '+j.error); }
+async function loadAuto(){ var r=await (await fetch('/admin/autostart')).json(), c=document.getElementById('auto'), m=document.getElementById('automsg');
+ c.checked=!!r.enabled; c.disabled=!r.available;
+ m.textContent = !r.available ? 'ใช้ได้เมื่อเปิดจาก DocScan.exe เท่านั้น' : (r.enabled && r.target_ok===false ? '⚠ ทางลัดเดิมชี้ไปที่อื่น (ย้าย DocScan.exe?) — ติ๊กออกแล้วติ๊กใหม่เพื่ออัปเดต' : (r.enabled ? '✅ เปิดอยู่ — โปรแกรมนี้จะเริ่มเองเมื่อเปิดเครื่อง: '+r.exe : '')); }
+async function setAuto(){ var c=document.getElementById('auto'), m=document.getElementById('automsg'); var r=await post('/admin/autostart',{enable:c.checked});
+ if(!r.ok){ m.textContent='❌ '+(r.error||'ทำไม่สำเร็จ'); } await loadAuto(); if(!r.ok) return; m.textContent = (c.checked?'✅ ตั้งให้เปิดอัตโนมัติแล้ว: '+r.exe:'✅ ยกเลิกการเปิดอัตโนมัติแล้ว'); }
 async function copyUrl(){ var t=document.getElementById('url').textContent, m=document.getElementById('cpmsg'), ok=false;
  try{ await navigator.clipboard.writeText(t); ok=true; }catch(e){ try{ var a=document.createElement('textarea'); a.value=t; document.body.appendChild(a); a.select(); ok=document.execCommand('copy'); a.remove(); }catch(e2){} }
  m.textContent=ok?'✅ คัดลอกแล้ว — เปิด LINE แล้ววาง (แนะนำให้กดลิงก์ค้างแล้วเลือกเปิดใน Safari)':'❌ คัดลอกไม่ได้ — ลากคลุมลิงก์แล้วกด Ctrl+C'; }
-load();
+async function quitApp(){ if(!confirm('ปิด DocScan? (iPhone จะส่งไฟล์เข้าคอมไม่ได้จนกว่าจะเปิดโปรแกรมอีกครั้ง)')) return; try{ await post('/admin/quit'); }catch(e){}
+ document.body.innerHTML='<h1>DocScan ปิดแล้ว</h1><p class="mut">เปิดใหม่ได้โดยดับเบิลคลิก DocScan.exe</p>'; }
+load(); loadAuto();
 </script></body></html>'''
 
 
@@ -233,6 +317,9 @@ class H(BaseHTTPRequestHandler):
         if u.path == '/admin':
             if not self._local(): return self._html('admin เปิดได้เฉพาะจากคอมเครื่องนี้', 403)
             return self._html(ADMIN_HTML)
+        if u.path == '/admin/autostart':
+            if not self._local(): return self._json({'ok': False}, 403)
+            return self._json(autostart_state())
         if u.path == '/admin/state':
             if not self._local(): return self._json({'ok': False}, 403)
             url = 'http://%s:%d/?k=%s' % (lan_ip(), PORT, CFG['key'])
@@ -262,8 +349,21 @@ class H(BaseHTTPRequestHandler):
                     f.write(body)
             print('saved', path, len(body), 'bytes')
             return self._json({'ok': True, 'saved': os.path.basename(path), 'dir': CFG['dir']})
-        if u.path in ('/admin/setdir', '/admin/pick', '/admin/open'):
+        if u.path in ('/admin/setdir', '/admin/pick', '/admin/open', '/admin/autostart', '/admin/quit'):
             if not self._local(): return self._json({'ok': False, 'error': 'เฉพาะคอมเครื่องนี้'}, 403)
+            if u.path == '/admin/quit':
+                self._json({'ok': True})
+                threading.Timer(0.4, lambda: os._exit(0)).start()   # ตอบก่อนแล้วค่อยปิดตัวเอง
+                return
+            if u.path == '/admin/autostart':
+                try:
+                    data = json.loads(self.rfile.read(n) or b'{}')
+                    ok, err = autostart_set(bool(data.get('enable')))
+                    st = autostart_state(); st['ok'] = ok
+                    if err: st['error'] = err
+                    return self._json(st)
+                except Exception as e:
+                    return self._json({'ok': False, 'error': str(e)})
             if u.path == '/admin/open':
                 try:
                     os.makedirs(CFG['dir'], exist_ok=True)
@@ -291,29 +391,36 @@ class H(BaseHTTPRequestHandler):
 
 def main():
     if len(sys.argv) >= 2 and sys.argv[1] == '--pick':
-        return pick_dialog_main(sys.argv[2] if len(sys.argv) > 2 else '')
-    try:   # คอนโซลของ Windows ปกติไม่ใช่ UTF-8 — ไม่ตั้งไว้ข้อความไทยจะทำให้ print พังได้
-        sys.stdout.reconfigure(encoding='utf-8', errors='replace'); sys.stderr.reconfigure(encoding='utf-8', errors='replace')
-        if FROZEN: os.system('chcp 65001 >nul')
-    except Exception:
-        pass
+        return pick_dialog_main(sys.argv[2] if len(sys.argv) > 2 else '', sys.argv[3] if len(sys.argv) > 3 else os.devnull)
+    if sys.stdout is None or sys.stderr is None:   # exe แบบรันเบื้องหลัง (ไม่มีหน้าต่างคอนโซล): เขียน log ลงไฟล์แทน
+        try:
+            lp = os.path.join(DATA, 'docscan.log')
+            if os.path.exists(lp) and os.path.getsize(lp) > 1024 * 1024: os.remove(lp)
+            sys.stdout = sys.stderr = open(lp, 'a', encoding='utf-8', buffering=1)
+        except Exception:
+            sys.stdout = sys.stderr = open(os.devnull, 'w')
+    else:
+        try:   # คอนโซลของ Windows ปกติไม่ใช่ UTF-8 — ไม่ตั้งไว้ข้อความไทยจะทำให้ print พังได้
+            sys.stdout.reconfigure(encoding='utf-8', errors='replace'); sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+        except Exception:
+            pass
     os.makedirs(CFG['dir'], exist_ok=True)
     ip = lan_ip()
     try:
         srv = ThreadingHTTPServer(('0.0.0.0', PORT), H)
     except OSError:
         print('พอร์ต %d ถูกใช้อยู่ — น่าจะเปิด DocScan ไว้แล้ว (เปิดหน้าตั้งค่าให้แทน)' % PORT)
+        if '--startup' in sys.argv: return   # เปิดอัตโนมัติตอนบูตแล้วมีตัวอื่นรันอยู่ — เงียบๆ แล้วจบ
         webbrowser.open('http://127.0.0.1:%d/admin' % PORT)
-        if FROZEN: input('กด Enter เพื่อปิดหน้าต่างนี้…')
         return
     print('=' * 60)
     print(' DocScan server พร้อมใช้งาน')
     print(' โฟลเดอร์เก็บไฟล์ :', CFG['dir'])
     print(' ตั้งค่า/QR บนคอม :  http://127.0.0.1:%d/admin' % PORT)
     print(' ลิงก์สำหรับ iPhone:  http://%s:%d/?k=%s' % (ip, PORT, CFG['key']))
-    print(' (ปิดหน้าต่างนี้ = หยุดรับไฟล์)  กด Ctrl+C เพื่อหยุด')
+    print(' (หยุดโปรแกรม: ปุ่ม "ปิดโปรแกรม" ในหน้าตั้งค่า หรือกด Ctrl+C)')
     print('=' * 60)
-    if FROZEN and not os.environ.get('DOCSCAN_NOBROWSER'):
+    if FROZEN and '--startup' not in sys.argv and not os.environ.get('DOCSCAN_NOBROWSER'):
         threading.Timer(0.8, lambda: webbrowser.open('http://127.0.0.1:%d/admin' % PORT)).start()
     try:
         srv.serve_forever()

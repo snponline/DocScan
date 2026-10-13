@@ -20,11 +20,12 @@ def version():
 README = u"""DocScan — สแกนเอกสารด้วย iPhone แล้วส่งเข้าคอม ({ver})
 
 วิธีใช้
-1) ดับเบิลคลิก DocScan.exe  (หน้าต่างสีดำที่เปิดขึ้นมาให้เปิดค้างไว้ — ปิดเมื่อไร จะหยุดรับไฟล์)
+1) ดับเบิลคลิก DocScan.exe  (โปรแกรมทำงานอยู่เบื้องหลัง ไม่มีหน้าต่าง — ปิดได้จากปุ่ม "ปิดโปรแกรม" ในหน้าตั้งค่า)
    - ครั้งแรก Windows อาจถามเรื่อง Firewall ให้กด "อนุญาต" (เครือข่ายส่วนตัว)
    - ถ้าขึ้น "Windows protected your PC" ให้กด "More info" แล้ว "Run anyway"
 2) เบราว์เซอร์จะเปิดหน้า "DocScan — ตั้งค่า" ให้อัตโนมัติ
    - เลือกโฟลเดอร์ที่จะเก็บไฟล์สแกนได้ (ค่าเริ่มต้น: Documents\\DocScan)
+   - ติ๊ก "เปิด DocScan อัตโนมัติเมื่อเปิดเครื่อง" ถ้าไม่อยากมาเปิดเองทุกครั้ง (ย้าย DocScan.exe ไปไว้โฟลเดอร์ถาวรก่อน)
 3) ใช้ iPhone สแกน QR ในหน้านั้น (iPhone ต้องอยู่ Wi-Fi เดียวกับคอม) แล้วเปิดใน Safari
    - ถ้าสะดวกกว่า กดปุ่ม "คัดลอกลิงก์" แล้วส่งเข้า LINE ให้ iPhone — แต่ให้กดค้างที่ลิงก์แล้วเลือกเปิดใน Safari (ไม่ใช่เบราว์เซอร์ใน LINE)
    - กด "เพิ่มไปยังหน้าจอโฮม" ใน Safari จะเปิดใช้ครั้งต่อไปได้เร็ว
@@ -43,7 +44,7 @@ def main():
     py = [sys.executable, '-m', 'PyInstaller']
     for d in (WORK, os.path.join(HERE, 'dist')):
         shutil.rmtree(d, ignore_errors=True)
-    cmd = py + ['--noconfirm', '--clean', '--onefile', '--console', '--name', 'DocScan',
+    cmd = py + ['--noconfirm', '--clean', '--onefile', '--noconsole', '--name', 'DocScan',
                 '--distpath', os.path.join(WORK, 'dist'), '--workpath', os.path.join(WORK, 'work'), '--specpath', WORK,
                 '--add-data', os.path.join(HERE, 'index.html') + os.pathsep + '.',
                 '--hidden-import', 'tkinter', '--hidden-import', 'qrcode',
