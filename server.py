@@ -313,7 +313,10 @@ class H(BaseHTTPRequestHandler):
             with open(os.path.join(HERE, 'index.html'), 'rb') as f:
                 return self._html(f.read())
         if u.path == '/api/info':
-            return self._json({'ok': True, 'dir': CFG['dir'], 'name': os.path.basename(CFG['dir'].rstrip('\\/')) or CFG['dir']})
+            info = {'ok': True, 'dir': CFG['dir'], 'name': os.path.basename(CFG['dir'].rstrip('\\/')) or CFG['dir']}
+            kq = parse_qs(u.query).get('k')
+            if kq is not None: info['keyOk'] = (kq[0] == CFG['key'])   # หน้าเว็บบน iPhone ใช้เช็คว่ารหัสที่จำไว้ตรงกับโปรแกรมนี้ก่อนส่งไฟล์
+            return self._json(info)
         if u.path == '/admin':
             if not self._local(): return self._html('admin เปิดได้เฉพาะจากคอมเครื่องนี้', 403)
             return self._html(ADMIN_HTML)
@@ -326,16 +329,32 @@ class H(BaseHTTPRequestHandler):
             return self._json({'dir': CFG['dir'], 'url': url, 'qr': qr_svg(url), 'cloud': in_cloud_sync(CFG['dir'])})
         self._json({'ok': False, 'error': 'not found'}, 404)
 
+    def _drain(self, n):
+        """อ่านทิ้งเนื้อหาที่ client ส่งมาก่อนตอบ error — ถ้าตอบแล้วปิดการเชื่อมต่อทั้งที่ยังมีข้อมูลค้าง Windows จะส่ง RST
+        แล้ว Safari บน iPhone จะไม่ได้เห็นข้อความ error เลย (ขึ้นแค่ "Load failed")"""
+        left = min(n, 70 * 1024 * 1024)
+        try:
+            while left > 0:
+                chunk = self.rfile.read(min(65536, left))
+                if not chunk:
+                    break
+                left -= len(chunk)
+        except Exception:
+            pass
+
     def do_POST(self):
         u = urlparse(self.path); q = parse_qs(u.query)
         n = int(self.headers.get('Content-Length') or 0)
         if u.path == '/api/upload':
             if (q.get('k') or [''])[0] != CFG['key']:
-                return self._json({'ok': False, 'error': 'รหัสไม่ถูกต้อง — เปิดลิงก์จากหน้า admin บนคอมอีกครั้ง'}, 403)
+                self._drain(n)
+                return self._json({'ok': False, 'error': 'รหัสไม่ถูกต้อง — เปิดลิงก์/สแกน QR จากหน้า admin บนคอมอีกครั้ง (ถ้าเปิดโปรแกรมใหม่ รหัสอาจเปลี่ยน)'}, 403)
             if n <= 0 or n > MAX_BYTES:
+                self._drain(n)
                 return self._json({'ok': False, 'error': 'ไฟล์ว่างหรือใหญ่เกิน 60 MB'}, 413)
             name = safe_name((q.get('name') or [''])[0])
             if not name:
+                self._drain(n)
                 return self._json({'ok': False, 'error': 'รับเฉพาะไฟล์ .jpg / .pdf'}, 400)
             body = self.rfile.read(n)
             if name.lower().endswith('.pdf') and not body.startswith(b'%PDF'):
