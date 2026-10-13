@@ -1,0 +1,554 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="สแกนเอกสาร">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#0f766e">
+<title>สแกนเอกสาร</title>
+<style>
+:root{
+  --bg:#f4f6f5; --card:#ffffff; --text:#13201d; --muted:#5d6f6a; --line:#dbe3e0;
+  --pri:#0f766e; --pri-d:#0b5a54; --pri-t:#e0f2ef; --warn:#b45309; --danger:#b91c1c;
+}
+@media (prefers-color-scheme:dark){
+  :root{ --bg:#0e1514; --card:#172220; --text:#e8f1ee; --muted:#94a8a2; --line:#2a3b38; --pri:#2dd4bf; --pri-d:#5eead4; --pri-t:#123a35; --warn:#fbbf24; --danger:#f87171; }
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Sarabun","Segoe UI",sans-serif;background:var(--bg);color:var(--text);padding-bottom:calc(150px + env(safe-area-inset-bottom));font-size:17px}
+header{padding:calc(14px + env(safe-area-inset-top)) 16px 12px;background:var(--pri);color:#fff}
+header h1{margin:0;font-size:22px}
+header p{margin:2px 0 0;font-size:13px;opacity:.9}
+.wrap{max-width:760px;margin:0 auto;padding:14px 14px 0}
+.addrow{display:flex;gap:10px}
+.btn{appearance:none;border:0;border-radius:14px;font:inherit;font-weight:700;cursor:pointer;padding:14px 16px;display:inline-flex;align-items:center;justify-content:center;gap:8px}
+.btn.pri{background:var(--pri);color:#fff}
+@media (prefers-color-scheme:dark){.btn.pri{color:#06201d}}
+.btn.sec{background:var(--card);color:var(--text);border:1.5px solid var(--line)}
+.btn.sm{padding:9px 12px;font-size:14px;border-radius:10px}
+.btn:active{transform:scale(.98)}
+.addrow .btn{flex:1}
+#empty{margin:22px 4px;text-align:center;color:var(--muted);line-height:1.6}
+#pages{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px;margin-top:14px}
+.pg{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.pg .img{background:#e5e7eb;display:flex;align-items:center;justify-content:center;min-height:150px}
+.pg img{width:100%;display:block;max-height:62vh;object-fit:contain}
+.pg .meta{display:flex;justify-content:space-between;align-items:center;padding:10px 12px 0;font-size:14px;color:var(--muted)}
+.pg .acts{display:flex;flex-wrap:wrap;gap:6px;padding:8px 10px 10px}
+.pg .acts .btn{flex:1 1 auto;min-width:46px}
+.bar{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);padding:12px 14px calc(12px + env(safe-area-inset-bottom));box-shadow:0 -6px 18px rgba(0,0,0,.08)}
+.bar .in{max-width:760px;margin:0 auto}
+.seg{display:flex;background:var(--bg);border:1.5px solid var(--line);border-radius:12px;padding:3px;margin-bottom:10px}
+.seg button{flex:1;appearance:none;border:0;background:transparent;font:inherit;font-weight:700;color:var(--muted);padding:10px;border-radius:9px;cursor:pointer}
+.seg button.on{background:var(--pri);color:#fff}
+@media (prefers-color-scheme:dark){.seg button.on{color:#06201d}}
+.opts{display:flex;gap:8px;align-items:center;margin-bottom:10px;font-size:14px;color:var(--muted);flex-wrap:wrap}
+.opts select{font:inherit;background:var(--card);color:var(--text);border:1.5px solid var(--line);border-radius:10px;padding:7px 8px}
+#go{width:100%}
+#go[disabled]{opacity:.45}
+#status{font-size:13px;color:var(--muted);text-align:center;margin-top:8px;min-height:18px}
+/* crop modal */
+#crop{position:fixed;inset:0;background:#0b0f0e;z-index:50;display:none;flex-direction:column}
+#crop.open{display:flex}
+#crop .top{display:flex;justify-content:space-between;align-items:center;color:#fff;padding:calc(10px + env(safe-area-inset-top)) 14px 10px;gap:8px}
+#crop .top span{font-weight:700}
+#cwrap{flex:1;position:relative;touch-action:none;min-height:0}
+#ccv{position:absolute;inset:0;width:100%;height:100%}
+#crop .foot{display:flex;gap:8px;padding:10px 14px calc(12px + env(safe-area-inset-bottom))}
+#crop .foot .btn{flex:1}
+.toast{position:fixed;left:50%;bottom:calc(170px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#111;color:#fff;padding:10px 16px;border-radius:12px;font-size:14px;z-index:80;opacity:0;pointer-events:none;transition:opacity .2s;max-width:88vw;text-align:center}
+.toast.show{opacity:.95}
+.note{font-size:12.5px;color:var(--muted);margin:16px 4px;line-height:1.55}
+</style>
+</head>
+<body>
+<header>
+  <h1>📄 สแกนเอกสาร</h1>
+  <p>ถ่ายรูป → ตัดขอบ → เลือกบันทึกเป็น JPG หรือ PDF · ประมวลผลในเครื่อง ไม่อัปโหลดไปไหน <span style="opacity:.7">· v2026-10-13l</span></p>
+</header>
+
+<div class="wrap">
+  <div id="lineWarn" style="display:none;background:#fef3c7;color:#78350f;border:1.5px solid #f59e0b;border-radius:12px;padding:11px 13px;margin-bottom:12px;font-size:14px;line-height:1.55">
+    ⚠️ ตอนนี้เปิดอยู่ในเบราว์เซอร์ของแอป LINE ซึ่งมักใช้กล้อง/บันทึกไฟล์ไม่ครบ และจำหน้าเก่าไว้<br>
+    <b>วิธีแก้:</b> กดปุ่ม <b>⋯</b> (มุมขวาบนหรือล่าง) → เลือก <b>“เปิดใน Safari”</b> (Open in browser) แล้วใช้งานต่อใน Safari
+  </div>
+  <div class="addrow">
+    <button class="btn pri" id="btnCam">📷 ถ่ายรูปเอกสาร</button>
+    <button class="btn sec" id="btnPick">🖼️ เลือกจากรูปภาพ</button>
+  </div>
+  <input type="file" id="inCam" accept="image/*" capture="environment" hidden>
+  <input type="file" id="inPick" accept="image/*" multiple hidden>
+
+  <div id="empty">ยังไม่มีหน้าเอกสาร<br>กด “ถ่ายรูปเอกสาร” ถ่ายทีละหน้า แล้วถ่ายหน้าต่อไปได้เรื่อยๆ</div>
+  <div id="pages"></div>
+  <p class="note">เคล็ดลับ: วางกระดาษบนพื้นสีเข้ม ถ่ายให้เห็นครบทั้งแผ่น แสงสว่างสม่ำเสมอ ไม่ให้เงาบัง หลังถ่ายกด “✂️ ตัดขอบ” แล้วลากมุมทั้ง 4 ให้ตรงขอบกระดาษ แอปจะดึงให้เป็นสี่เหลี่ยมตรงและปรับให้ตัวหนังสือคมชัด</p>
+</div>
+
+<div class="bar"><div class="in">
+  <div class="seg" id="seg">
+    <button data-f="jpg" class="on">🖼️ JPG (ทีละหน้า)</button>
+    <button data-f="pdf">📑 PDF (รวมหน้า)</button>
+  </div>
+  <div class="opts">
+    <span>ฟิลเตอร์</span>
+    <select id="filterAll"></select>
+    <span>คุณภาพ</span>
+    <select id="quality"><option value="0.92">สูง (ไฟล์ใหญ่)</option><option value="0.85" selected>ปกติ</option><option value="0.7">เล็ก</option></select>
+    <span id="pdfopt" style="display:none">ขนาดกระดาษ</span>
+    <select id="paper" style="display:none"><option value="a4" selected>A4</option><option value="fit">ตามขนาดภาพ</option></select>
+  </div>
+  <div class="opts" id="destRow" style="display:none">
+    <span>ปลายทาง</span>
+    <select id="dest"><option value="pc" selected>💻 ส่งเข้าโฟลเดอร์บนคอม</option><option value="local">📤 แชร์/ดาวน์โหลดในเครื่องนี้</option></select>
+  </div>
+  <div id="destInfo" style="display:none;font-size:12.5px;color:var(--muted);margin:-4px 0 10px 2px"></div>
+  <button class="btn pri" id="go" disabled>💾 บันทึก / แชร์</button>
+  <div id="status"></div>
+</div></div>
+
+<div id="crop">
+  <div class="top"><button class="btn sm sec" id="cCancel">ยกเลิก</button><span id="cTitle">ตัดขอบ</span><button class="btn sm pri" id="cOk">เสร็จ</button></div>
+  <div id="cwrap"><canvas id="ccv"></canvas></div>
+  <div class="foot"><button class="btn sec" id="cReset">ทั้งภาพ</button><button class="btn sec" id="cAuto">✨ จับขอบอัตโนมัติ</button></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+// ───────── state ─────────
+var pages = [];            // {id, src:canvas (ภาพย่อสำหรับหน้าจอ), file (ไฟล์รูปต้นฉบับ), rot (หมุน 90° กี่ครั้ง), corners:[{x,y}*4 TL,TR,BR,BL] (พิกัดบน src), filter}
+var outFmt = 'jpg';
+var uid = 1;
+var MAXSIDE = 2000;        // ด้านยาวสุดของภาพย่อที่เก็บไว้ใช้บนหน้าจอ (ตัดขอบ/ตัวอย่าง/จับขอบ) — เล็กไว้ไม่ให้ Safari บน iPhone หน่วยความจำเต็มเมื่อสแกนหลายหน้า
+var FULLSIDE = 3600;       // ตอนบันทึก: เปิดไฟล์ต้นฉบับใหม่ทีละหน้าที่ขนาดนี้ (หน้า A4 ได้ราว 290 dpi — ตัวหนังสือพิมพ์ออกมาคมกว่า)
+var FILTERS = [['natural','สีธรรมชาติ (แนะนำ)'],['scan','สแกนแบบ Notes'],['color','สีชัด'],['doc','เอกสาร (ขาว-เทา)'],['bw','ขาวดำ'],['orig','ต้นฉบับ']];
+function $(id){ return document.getElementById(id); }
+function toast(msg, ms){ var t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toast._t); toast._t=setTimeout(function(){t.classList.remove('show');}, ms||2200); }
+function setStatus(s){ $('status').textContent = s || ''; }
+
+// ───────── เพิ่มรูป ─────────
+function loadImageFile(file, maxSide){
+  return new Promise(function(res, rej){
+    var url = URL.createObjectURL(file), img = new Image();
+    img.onload = function(){
+      var w = img.naturalWidth, h = img.naturalHeight, s = Math.min(1, (maxSide||MAXSIDE) / Math.max(w, h));
+      var c = document.createElement('canvas'); c.width = Math.round(w*s); c.height = Math.round(h*s);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url); res(c);
+    };
+    img.onerror = function(){ URL.revokeObjectURL(url); rej(new Error('เปิดรูปไม่ได้')); };
+    img.src = url;
+  });
+}
+function addCanvas(c){
+  var m = Math.round(Math.min(c.width, c.height) * 0.04);
+  var p = { id: uid++, src: c, filter: ($('filterAll') && $('filterAll').value) || 'natural', corners: [{x:m,y:m},{x:c.width-m,y:m},{x:c.width-m,y:c.height-m},{x:m,y:c.height-m}] };
+  var auto = autoDetect(c);
+  if (auto) p.corners = auto;
+  pages.push(p);
+  renderList();
+  return p;
+}
+async function addFiles(files){
+  for (var i=0;i<files.length;i++){
+    try { setStatus('กำลังโหลดรูป ' + (i+1) + '/' + files.length + '…'); var np=addCanvas(await loadImageFile(files[i])); np.file=files[i]; np.rot=0; }
+    catch(e){ toast('เปิดรูปไม่ได้: ' + files[i].name); }
+  }
+  setStatus('');
+}
+$('btnCam').onclick = function(){ $('inCam').click(); };
+$('btnPick').onclick = function(){ $('inPick').click(); };
+$('inCam').onchange = function(e){ if (e.target.files.length) addFiles(e.target.files); e.target.value=''; };
+$('inPick').onchange = function(e){ if (e.target.files.length) addFiles(e.target.files); e.target.value=''; };
+
+// ───────── คณิตศาสตร์: homography + warp ─────────
+function solve8(A, b){ // gaussian elimination 8x8
+  var n = 8, i, j, k;
+  for (i=0;i<n;i++){ A[i].push(b[i]); }
+  for (i=0;i<n;i++){
+    var max=i; for (k=i+1;k<n;k++) if (Math.abs(A[k][i])>Math.abs(A[max][i])) max=k;
+    var t=A[i]; A[i]=A[max]; A[max]=t;
+    if (Math.abs(A[i][i])<1e-12) return null;
+    for (k=i+1;k<n;k++){ var f=A[k][i]/A[i][i]; for (j=i;j<=n;j++) A[k][j]-=f*A[i][j]; }
+  }
+  var x=new Array(n);
+  for (i=n-1;i>=0;i--){ var s=A[i][n]; for (j=i+1;j<n;j++) s-=A[i][j]*x[j]; x[i]=s/A[i][i]; }
+  return x;
+}
+function homography(dst, src){ // คืน h ที่ map (x,y) ใน dst → (u,v) ใน src
+  var A=[], b=[];
+  for (var i=0;i<4;i++){
+    var x=dst[i].x, y=dst[i].y, u=src[i].x, v=src[i].y;
+    A.push([x,y,1,0,0,0,-x*u,-y*u]); b.push(u);
+    A.push([0,0,0,x,y,1,-x*v,-y*v]); b.push(v);
+  }
+  return solve8(A,b);
+}
+function dist(a,b){ return Math.hypot(a.x-b.x, a.y-b.y); }
+function warpPage(p, maxSide){
+  var c = p.corners, W = Math.max(dist(c[0],c[1]), dist(c[3],c[2])), H = Math.max(dist(c[0],c[3]), dist(c[1],c[2]));
+  var s = Math.min(1, (maxSide||MAXSIDE) / Math.max(W,H));
+  W = Math.max(8, Math.round(W*s)); H = Math.max(8, Math.round(H*s));
+  var h = homography([{x:0,y:0},{x:W,y:0},{x:W,y:H},{x:0,y:H}], c);
+  var out = document.createElement('canvas'); out.width=W; out.height=H;
+  if (!h) { out.getContext('2d').drawImage(p.src,0,0,W,H); return out; }
+  var sw = p.src.width, sh = p.src.height;
+  var sd = p.src.getContext('2d').getImageData(0,0,sw,sh).data;
+  var oc = out.getContext('2d'), od = oc.createImageData(W,H), o = od.data;
+  var h0=h[0],h1=h[1],h2=h[2],h3=h[3],h4=h[4],h5=h[5],h6=h[6],h7=h[7];
+  for (var y=0;y<H;y++){
+    for (var x=0;x<W;x++){
+      var d = h6*x + h7*y + 1, u = (h0*x + h1*y + h2)/d, v = (h3*x + h4*y + h5)/d;
+      var oi = (y*W + x)*4;
+      if (u<0||v<0||u>=sw-1||v>=sh-1){ o[oi]=o[oi+1]=o[oi+2]=255; o[oi+3]=255; continue; }
+      var x0=u|0, y0=v|0, fx=u-x0, fy=v-y0, i00=(y0*sw+x0)*4, i10=i00+4, i01=i00+sw*4, i11=i01+4;
+      var w00=(1-fx)*(1-fy), w10=fx*(1-fy), w01=(1-fx)*fy, w11=fx*fy;
+      o[oi]   = sd[i00]*w00 + sd[i10]*w10 + sd[i01]*w01 + sd[i11]*w11;
+      o[oi+1] = sd[i00+1]*w00 + sd[i10+1]*w10 + sd[i01+1]*w01 + sd[i11+1]*w11;
+      o[oi+2] = sd[i00+2]*w00 + sd[i10+2]*w10 + sd[i01+2]*w01 + sd[i11+2]*w11;
+      o[oi+3] = 255;
+    }
+  }
+  oc.putImageData(od,0,0);
+  return out;
+}
+
+// ───────── ฟิลเตอร์ (ลบพื้นหลัง/แสงไม่สม่ำเสมอ ให้กระดาษขาว ตัวหนังสือคม) ─────────
+function backgroundLuma(cv, rfrac){
+  // ประมาณ "ความสว่างของพื้นกระดาษ" ทุกจุด: แบ่งภาพเป็นบล็อกเล็ก เอาค่าสว่างสุดของบล็อก (ตัวหนังสือบางๆ ไม่ทำให้ค่าต่ำ)
+  // แล้วหาค่าสว่างสุดในละแวกกว้าง rfrac*ด้านสั้น (พื้นที่ทึบใหญ่ๆ อย่างรูปถ่ายจะได้ค่าจากกระดาษรอบๆ) แล้วเกลี่ยให้เรียบ
+  var W=cv.width, H=cv.height, d=cv.getContext('2d').getImageData(0,0,W,H).data;
+  var bs=Math.max(6, Math.round(Math.min(W,H)/48)), gw=Math.ceil(W/bs), gh=Math.ceil(H/bs), blk=new Float32Array(gw*gh), x,y,i;
+  for (y=0;y<H;y++) for (x=0;x<W;x++){ var k=(y*W+x)*4, l=0.299*d[k]+0.587*d[k+1]+0.114*d[k+2], gi=((y/bs)|0)*gw+((x/bs)|0); if (l>blk[gi]) blk[gi]=l; }
+  var sorted=Array.prototype.slice.call(blk).sort(function(p,q){return p-q;}), p95=sorted[Math.floor(sorted.length*0.95)] || 255;
+  var R=Math.max(1, Math.round(rfrac*Math.min(W,H)/bs)), tmp=new Float32Array(gw*gh), mx=new Float32Array(gw*gh);
+  for (y=0;y<gh;y++) for (x=0;x<gw;x++){ var m=0; for (var xx=Math.max(0,x-R);xx<=Math.min(gw-1,x+R);xx++){ var q=blk[y*gw+xx]; if(q>m)m=q; } tmp[y*gw+x]=m; }   // แยกแกน (เร็วกว่า)
+  for (y=0;y<gh;y++) for (x=0;x<gw;x++){ var m2=0; for (var yy=Math.max(0,y-R);yy<=Math.min(gh-1,y+R);yy++){ var q2=tmp[yy*gw+x]; if(q2>m2)m2=q2; } mx[y*gw+x]=m2; }
+  var s0=document.createElement('canvas'); s0.width=gw; s0.height=gh; var sx=s0.getContext('2d'), sd=sx.createImageData(gw,gh);
+  for (i=0;i<gw*gh;i++){ var g=mx[i]; sd.data[i*4]=sd.data[i*4+1]=sd.data[i*4+2]=g; sd.data[i*4+3]=255; }
+  sx.putImageData(sd,0,0);
+  var big=document.createElement('canvas'); big.width=W; big.height=H; var bx=big.getContext('2d'); bx.imageSmoothingEnabled=true; bx.imageSmoothingQuality='high'; bx.drawImage(s0,0,0,W,H);
+  var bgData=bx.getImageData(0,0,W,H).data; big.width=big.height=0; s0.width=s0.height=0;
+  return { data: bgData, p95: p95 };
+}
+function applyFilter(cv, mode){
+  if (mode==='orig') return cv;
+  var W=cv.width, H=cv.height, ctx=cv.getContext('2d'), id=ctx.getImageData(0,0,W,H), d=id.data, n=W*H, i;
+  // โหมดที่คงสีรูปถ่าย (natural/color): ใช้ละแวกกว้างขึ้น + ไม่ให้ "ปรับสว่าง" เกิน ~25% จากพื้นกระดาษส่วนใหญ่ — ไม่งั้นรูปถ่าย/ตราประทับ
+  // (พื้นที่ทึบขนาดใหญ่) ถูกมองเป็นพื้นหลังแล้วถูกดันจนขาวจ้าเสียรายละเอียด; โหมดข้อความ (doc/bw) ใช้ละแวกเล็กเพื่อลบเงาแรงๆ
+  var keep=(mode==='natural'||mode==='color'||mode==='scan'), bgo=backgroundLuma(cv, mode==='scan'?0.12:(keep?0.24:0.07)), bg=bgo.data, floorB=keep ? bgo.p95*0.8 : 40;
+  // สแกนแบบ Notes: หา "ระดับหมึก" ของภาพนี้ (ความสว่างที่ 0.5% เข้มสุด) — รูปที่ถ่ายไกล/โฟกัสนุ่ม ตัวหนังสือในภาพดิบจะจาง (30–45% ของพื้น)
+  // จึงยืดเฉพาะช่วงมืด (ต่ำกว่า 0.75) ให้ระดับหมึกนั้นกลายเป็นเกือบดำ — ช่วงสว่าง (ลายน้ำ/พื้น) ไม่เปลี่ยน; จำกัดไม่เกิน 0.5 กันหน้าที่แทบไม่มีตัวหนังสือ
+  var inkT=0, SC_TGT=0.06, SC_KNEE=0.75;
+  if (mode==='scan'){
+    var hist=new Uint32Array(512);
+    for (i=0;i<n;i++){ var k0=i*4, b0=Math.max(bg[k0],floorB,40), lt=(0.299*d[k0]+0.587*d[k0+1]+0.114*d[k0+2])/b0/0.82; hist[lt>=1?511:(lt*511)|0]++; }
+    var need=n*0.005, acc=0, hb=0; while (hb<511 && acc+hist[hb]<need){ acc+=hist[hb]; hb++; }
+    inkT=Math.min(0.5, hb/511);
+  }
+  // สีธรรมชาติ: จุดขาวตามกระดาษจริงของภาพนี้ — ตัวประมาณพื้นเอาค่าสว่างสุดในละแวกกว้าง กระดาษส่วนใหญ่จึงได้แค่ ~0.85–0.9 ของค่านั้น
+  // (ภาพออกมาหม่น) → ใช้ความสว่างที่ 75% (ส่วนใหญ่คือกระดาษ) เป็นจุดขาว; ถ้าค่านั้นต่ำ (<0.84 = หน้าที่เป็นรูปถ่ายเยอะ) ค่อยๆ กลับไปใช้ 0.97 แบบเดิม กันรูปสว่างเกิน
+  var natWP=0.97;
+  if (mode==='natural'){
+    var nh=new Uint32Array(512);
+    for (i=0;i<n;i++){ var k1=i*4, b1=Math.max(bg[k1],floorB,40), l1=(0.299*d[k1]+0.587*d[k1+1]+0.114*d[k1+2])/b1; nh[l1>=1?511:(l1*511)|0]++; }
+    var need1=n*0.75, acc1=0, hb1=0; while (hb1<511 && acc1+nh[hb1]<need1){ acc1+=nh[hb1]; hb1++; }
+    var p75=hb1/511, wk=Math.min(1, Math.max(0, (p75-0.76)/0.08));   // 0 = หน้ารูปถ่าย (คงแบบเดิม), 1 = หน้าเอกสาร (ใช้จุดขาวตามกระดาษ)
+    natWP=Math.min(0.97, 0.97+(p75-0.97)*wk);
+  }
+  for (i=0;i<n;i++){
+    var k=i*4, b=Math.max(bg[k],floorB,40);
+    var r=d[k]/b, g=d[k+1]/b, bl=d[k+2]/b;
+    if (mode==='scan'){
+      // โทนแบบแอป Notes (วัดจากภาพเอกสารเดียวกันที่ถ่ายทั้ง 2 แอป): สว่างกว่า ~0.82 ของพื้น → ขาว, ไม่เพิ่มความคม,
+      // แต่หมึกเข้มเกือบดำตามที่ผู้ใช้ขอ (Notes จริงหมึกแค่เทา ~115) — โทนกลางยังไล่ระดับ เห็นรายละเอียดโลโก้/ตราประทับ, ลายน้ำยังจาง
+      var ch=[r,g,bl];
+      for (var c=0;c<3;c++){ var t=ch[c]/0.82; t=t<0?0:(t>1?1:t);
+        if (inkT>SC_TGT && t<SC_KNEE) t = t<=inkT ? t*SC_TGT/inkT : SC_TGT+(SC_KNEE-SC_TGT)*(t-inkT)/(SC_KNEE-inkT);
+        d[k+c]=SCAN_LUT[(t*1023)|0]; }
+    } else if (mode==='natural'){
+      // ปรับแสง/พื้นกระดาษให้ขาว แต่ "ไม่" ดันความต่างหรือตัดโทนมืด — คงสีและรายละเอียดของรูปถ่ายในเอกสาร
+      d[k]=clamp255(r/natWP*255); d[k+1]=clamp255(g/natWP*255); d[k+2]=clamp255(bl/natWP*255);
+    } else if (mode==='color'){
+      d[k]=clamp255((r-0.35)/0.62*255); d[k+1]=clamp255((g-0.35)/0.62*255); d[k+2]=clamp255((bl-0.35)/0.62*255);
+    } else {
+      var l=0.299*r+0.587*g+0.114*bl, v=(mode==='bw') ? (l>0.80?255:0) : clamp255((l-0.55)/0.40*255);
+      d[k]=d[k+1]=d[k+2]=v;
+    }
+  }
+  ctx.putImageData(id,0,0);
+  return cv;
+}
+// เส้นโทนของฟิลเตอร์ "สแกนแบบ Notes": t (= ความสว่างเทียบพื้นกระดาษ/0.82) → ค่าพิกเซล, ลากเส้นตรงระหว่างจุด
+// ช่วง 0.25–0.65 (ขอบตัวอักษร) ทำให้เข้มกว่า Notes — เวลาพิมพ์ออกมาเส้นดูหนาขึ้น (สีเทาที่ขอบ เครื่องพิมพ์พิมพ์เป็นจุดห่างๆ จนดูบาง)
+var SCAN_LUT = (function(){ var xs=[0,0.25,0.45,0.65,0.80,0.92,1], ys=[8,20,50,120,195,240,255], o=new Uint8ClampedArray(1024), j=0;
+  for (var i=0;i<1024;i++){ var t=i/1023; while (j<xs.length-2 && t>xs[j+1]) j++; o[i]=ys[j]+(ys[j+1]-ys[j])*(t-xs[j])/(xs[j+1]-xs[j]); }
+  return o; })();
+function clamp255(v){ return v<0?0:(v>255?255:v); }
+function renderPage(p, maxSide){ return applyFilter(warpPage(p, maxSide), p.filter); }
+function rotCanvas(s){ // หมุน 90° ตามเข็ม
+  var c=document.createElement('canvas'); c.width=s.height; c.height=s.width;
+  var x=c.getContext('2d'); x.translate(c.width,0); x.rotate(Math.PI/2); x.drawImage(s,0,0); return c;
+}
+async function renderPageFull(p){ // ภาพที่บันทึกจริง: เปิดไฟล์ต้นฉบับที่ FULLSIDE, หมุนตามที่ผู้ใช้หมุน, ขยายพิกัดมุมตามสัดส่วน
+  var full=p.src;
+  if (p.file){ try { full=await loadImageFile(p.file, FULLSIDE); for (var r=0;r<(p.rot||0);r++){ var nc=rotCanvas(full); full.width=full.height=0; full=nc; } } catch(e){ full=p.src; } }
+  var k=full.width/p.src.width, q={src:full, corners:p.corners.map(function(c){ return {x:c.x*k, y:c.y*k}; })};
+  var out=warpPage(q, FULLSIDE);
+  if (full!==p.src) full.width=full.height=0;   // คืนหน่วยความจำทันที (Safari iOS จำกัดหน่วยความจำ canvas รวม)
+  return applyFilter(out, p.filter);
+}
+
+// ───────── จับขอบอัตโนมัติ ─────────
+// วิธี: ย่อภาพ → หาสีพื้นหลังจากกรอบรอบภาพ → สร้าง mask "ส่วนที่ต่างจากพื้น" (Otsu) → เอากลุ่มก้อนใหญ่สุด → หา 4 มุมจากจุดสุดทแยง
+// ถ้าไม่ได้ผล ลอง mask แบบ "สว่างกว่าค่า Otsu" ต่อ — ถ้ายังไม่ผ่านเงื่อนไข (สัดส่วน/รูปทรง) คืน null แล้วใช้กรอบกว้างๆ ให้ผู้ใช้ลากมุมเอง
+function otsu(hist, total){
+  var sum=0,i; for(i=0;i<256;i++) sum+=i*hist[i];
+  var sB=0,wB=0,best=-1,thr=128;
+  for(i=0;i<256;i++){ wB+=hist[i]; if(!wB) continue; var wF=total-wB; if(!wF) break; sB+=i*hist[i]; var mB=sB/wB,mF=(sum-sB)/wF,v=wB*wF*(mB-mF)*(mB-mF); if(v>best){best=v;thr=i;} }
+  return thr;
+}
+function cleanMask(m,w,h){ // เปิด/ปิดแบบง่าย (เสียงรบกวนจุดเล็กๆ) ด้วย majority 3x3 สองรอบ
+  for (var pass=0;pass<2;pass++){
+    var o=new Uint8Array(w*h);
+    for (var y=1;y<h-1;y++) for (var x=1;x<w-1;x++){ var c=0,i=y*w+x; c+=m[i-w-1]+m[i-w]+m[i-w+1]+m[i-1]+m[i]+m[i+1]+m[i+w-1]+m[i+w]+m[i+w+1]; o[i]=c>=5?1:0; }
+    m=o;
+  }
+  return m;
+}
+function largestComponent(m,w,h){ // BFS แบบ 4-neighbour คืน {pts:[idx], area}
+  var lab=new Int32Array(w*h), best=null, id=0, q=new Int32Array(w*h);
+  for (var s=0;s<w*h;s++){
+    if(!m[s]||lab[s]) continue; id++; var head=0,tail=0; q[tail++]=s; lab[s]=id; var cnt=0;
+    while(head<tail){ var i=q[head++]; cnt++; var x=i%w,y=(i/w)|0;
+      if(x>0&&m[i-1]&&!lab[i-1]){lab[i-1]=id;q[tail++]=i-1;} if(x<w-1&&m[i+1]&&!lab[i+1]){lab[i+1]=id;q[tail++]=i+1;}
+      if(y>0&&m[i-w]&&!lab[i-w]){lab[i-w]=id;q[tail++]=i-w;} if(y<h-1&&m[i+w]&&!lab[i+w]){lab[i+w]=id;q[tail++]=i+w;} }
+    if(!best||cnt>best.area) best={id:id,area:cnt};
+  }
+  if(!best) return null;
+  var pts=[]; for (var k=0;k<w*h;k++) if(lab[k]===best.id) pts.push(k);
+  return {pts:pts, area:best.area};
+}
+function quadFromComponent(comp,w,h,total){
+  var tl,tr,br,bl,sTL=1e9,sTR=-1e9,sBR=-1e9,sBL=1e9;
+  comp.pts.forEach(function(i){ var x=i%w,y=(i/w)|0,s1=x+y,s2=x-y;
+    if(s1<sTL){sTL=s1;tl={x:x,y:y};} if(s1>sBR){sBR=s1;br={x:x,y:y};} if(s2>sTR){sTR=s2;tr={x:x,y:y};} if(s2<sBL){sBL=s2;bl={x:x,y:y};} });
+  var q=[tl,tr,br,bl];
+  var area=Math.abs((q[0].x*q[1].y-q[1].x*q[0].y)+(q[1].x*q[2].y-q[2].x*q[1].y)+(q[2].x*q[3].y-q[3].x*q[2].y)+(q[3].x*q[0].y-q[0].x*q[3].y))/2;
+  var frac=comp.area/total, fill=area>0?comp.area/area:0;
+  // ต้อง: ก้อนใหญ่พอ (20–96% ของภาพ) และเต็มรูปสี่เหลี่ยมพอ (ไม่ใช่ก้อนรูปประหลาด)
+  if (frac<0.2 || frac>0.96 || fill<0.72) return null;
+  return q;
+}
+// ตรวจว่า 4 ด้านของสี่เหลี่ยมที่เดาได้ "วางอยู่บนขอบจริง" (มี gradient ข้ามเส้น) — กันกรณีเดาผิดแต่ดูมั่นใจ (พื้นกับกระดาษสีใกล้กัน)
+function quadEdgeOk(q, g, w, h){
+  var strong=0;
+  for (var e=0;e<4;e++){
+    var a=q[e], b=q[(e+1)%4], dx=b.x-a.x, dy=b.y-a.y, len=Math.hypot(dx,dy)||1, nx=-dy/len, ny=dx/len, vals=[];
+    for (var t=0.08;t<=0.92;t+=0.028){
+      var px=a.x+dx*t, py=a.y+dy*t, x1=Math.round(px+nx*3), y1=Math.round(py+ny*3), x2=Math.round(px-nx*3), y2=Math.round(py-ny*3);
+      if (x1<0||y1<0||x1>=w||y1>=h||x2<0||y2<0||x2>=w||y2>=h) { vals.push(0); continue; }   // ด้านที่ชิดขอบภาพ = ไม่มีหลักฐานว่าเป็นขอบกระดาษ
+      vals.push(Math.abs(g[y1*w+x1]-g[y2*w+x2]));
+    }
+    vals.sort(function(p,q){return p-q;});
+    if (vals[vals.length>>1] >= 7) strong++;
+  }
+  return strong>=2;
+}
+function autoDetect(src){
+  try {
+    var sc=Math.min(1,320/Math.max(src.width,src.height)), w=Math.max(24,Math.round(src.width*sc)), h=Math.max(24,Math.round(src.height*sc)), total=w*h;
+    var c=document.createElement('canvas'); c.width=w; c.height=h; var x=c.getContext('2d'); x.imageSmoothingQuality='high'; x.drawImage(src,0,0,w,h);
+    var a=x.getImageData(0,0,w,h).data, i, comp, q, g=new Uint8Array(total), hg=new Array(256).fill(0);
+    for (i=0;i<total;i++){ g[i]=(0.299*a[i*4]+0.587*a[i*4+1]+0.114*a[i*4+2])|0; hg[g[i]]++; }
+    var cands=[];
+    // A) ต่างจากสีพื้นหลัง (เดาพื้นหลังจากกรอบรอบภาพ 4%)
+    var bw=Math.max(2,Math.round(Math.min(w,h)*0.04)), R=[],G=[],B=[];
+    for (var yy=0;yy<h;yy++) for (var xx=0;xx<w;xx++) if (xx<bw||xx>=w-bw||yy<bw||yy>=h-bw){ var k=(yy*w+xx)*4; R.push(a[k]);G.push(a[k+1]);B.push(a[k+2]); }
+    function med(v){ v.sort(function(p,q){return p-q;}); return v[v.length>>1]; }
+    var mr=med(R),mg=med(G),mb=med(B), dist=new Uint8Array(total), hist=new Array(256).fill(0);
+    for (i=0;i<total;i++){ var d=Math.max(Math.abs(a[i*4]-mr),Math.abs(a[i*4+1]-mg),Math.abs(a[i*4+2]-mb)); dist[i]=d; hist[d]++; }
+    var t=otsu(hist,total), maskA=new Uint8Array(total);
+    for (i=0;i<total;i++) maskA[i]=dist[i]>Math.max(t,14)?1:0;
+    comp=largestComponent(cleanMask(maskA,w,h),w,h); q=comp&&quadFromComponent(comp,w,h,total); if(q) cands.push(q);
+    // B) สว่างกว่า Otsu (กระดาษสว่างบนพื้นเข้ม)
+    var tg=otsu(hg,total), maskB=new Uint8Array(total); for (i=0;i<total;i++) maskB[i]=g[i]>tg?1:0;
+    comp=largestComponent(cleanMask(maskB,w,h),w,h); q=comp&&quadFromComponent(comp,w,h,total); if(q) cands.push(q);
+    for (var ci=0;ci<cands.length;ci++){
+      if (quadEdgeOk(cands[ci], g, w, h)) return cands[ci].map(function(p){ return {x:p.x/sc, y:p.y/sc}; });
+    }
+    return null;   // ไม่มั่นใจ — ใช้กรอบกว้างๆ ให้ผู้ใช้ลากมุมเอง (ปุ่ม ✂️ ตัดขอบ / ✨ จับขอบอัตโนมัติ)
+  } catch(e){ return null; }
+}
+
+// ───────── รายการหน้า ─────────
+function thumbOf(p){
+  // ตัวอย่างต้องละเอียดพอสำหรับจอมือถือ (กว้าง ~1100 พิกเซลจริง) — ไม่งั้นดูเบลอกว่าไฟล์ที่บันทึก; เก็บแคชไว้ ไม่ต้องประมวลผลซ้ำทุกครั้งที่รายการเปลี่ยน
+  var key=p.filter+'|'+JSON.stringify(p.corners);
+  if (p._th && p._th.src===p.src && p._th.key===key) return p._th.url;
+  var c=renderPage(p, 1500), url=c.toDataURL('image/jpeg',0.88);
+  p._th={src:p.src, key:key, url:url};
+  return url;
+}
+function renderList(){
+  var el=$('pages'); el.innerHTML='';
+  $('empty').style.display = pages.length ? 'none' : '';
+  $('go').disabled = !pages.length;
+  pages.forEach(function(p, i){
+    var d=document.createElement('div'); d.className='pg';
+    var fname=(FILTERS.filter(function(f){return f[0]===p.filter;})[0]||[,''])[1];
+    d.innerHTML='<div class="meta"><b>หน้า '+(i+1)+'</b><span>ฟิลเตอร์: '+fname+'</span></div><div class="acts"></div><div class="img"><img alt="หน้า '+(i+1)+'"></div>';
+    d.querySelector('img').src = thumbOf(p);
+    var acts=d.querySelector('.acts');
+    function act(label, fn, cls){ var b=document.createElement('button'); b.className='btn sm sec'+(cls?' '+cls:''); b.textContent=label; b.onclick=fn; acts.appendChild(b); }
+    act('✂️ ตัดขอบ', function(){ openCrop(p); });
+    act('🎨 ฟิลเตอร์', function(){ var k=FILTERS.findIndex(function(f){return f[0]===p.filter;}); p.filter=FILTERS[(k+1)%FILTERS.length][0]; renderList(); });
+    act('⟳', function(){ rotate(p); });
+    if (i>0) act('↑', function(){ pages.splice(i-1,0,pages.splice(i,1)[0]); renderList(); });
+    if (i<pages.length-1) act('↓', function(){ pages.splice(i+1,0,pages.splice(i,1)[0]); renderList(); });
+    act('🗑', function(){ pages.splice(i,1); renderList(); });
+    el.appendChild(d);
+  });
+}
+(function(){ var sel=$('filterAll'); FILTERS.forEach(function(f){ var o=document.createElement('option'); o.value=f[0]; o.textContent=f[1]; sel.appendChild(o); });
+  sel.onchange=function(){ pages.forEach(function(p){ p.filter=sel.value; }); renderList(); toast('ตั้งฟิลเตอร์ทุกหน้า: '+sel.options[sel.selectedIndex].textContent); }; })();
+function rotate(p){ // หมุนต้นฉบับ 90° ตามเข็ม พร้อมหมุนมุมที่ตั้งไว้
+  var s=p.src, c=rotCanvas(s); p.rot=((p.rot||0)+1)%4;
+  p.corners = p.corners.map(function(q){ return {x:s.height-q.y, y:q.x}; });
+  // จัดลำดับ TL,TR,BR,BL ใหม่หลังหมุน
+  p.corners = [p.corners[3],p.corners[0],p.corners[1],p.corners[2]];
+  p.src=c; renderList();
+}
+
+// ───────── ตัดขอบ (modal) ─────────
+var cp=null, cvs=$('ccv'), cx=cvs.getContext('2d'), view={s:1,ox:0,oy:0}, drag=-1;
+function openCrop(p){
+  cp={p:p, corners:p.corners.map(function(q){return {x:q.x,y:q.y};})};
+  $('crop').classList.add('open'); resizeCrop(); drawCrop();
+}
+function resizeCrop(){
+  var r=$('cwrap').getBoundingClientRect(), dpr=window.devicePixelRatio||1;
+  cvs.width=Math.round(r.width*dpr); cvs.height=Math.round(r.height*dpr);
+  cx.setTransform(dpr,0,0,dpr,0,0);
+  var pad=26, s=Math.min((r.width-pad*2)/cp.p.src.width, (r.height-pad*2)/cp.p.src.height);
+  view={s:s, ox:(r.width-cp.p.src.width*s)/2, oy:(r.height-cp.p.src.height*s)/2, w:r.width, h:r.height};
+}
+function toView(q){ return {x:view.ox+q.x*view.s, y:view.oy+q.y*view.s}; }
+function drawCrop(){
+  if(!cp) return;
+  var src=cp.p.src; cx.clearRect(0,0,view.w,view.h);
+  cx.drawImage(src, view.ox, view.oy, src.width*view.s, src.height*view.s);
+  var pts=cp.corners.map(toView);
+  cx.fillStyle='rgba(0,0,0,.45)'; cx.beginPath(); cx.rect(0,0,view.w,view.h);
+  cx.moveTo(pts[0].x,pts[0].y); for (var i=3;i>=0;i--) cx.lineTo(pts[i].x,pts[i].y); cx.closePath(); cx.fill('evenodd');
+  cx.strokeStyle='#2dd4bf'; cx.lineWidth=2.5; cx.beginPath(); cx.moveTo(pts[0].x,pts[0].y); for (i=1;i<4;i++) cx.lineTo(pts[i].x,pts[i].y); cx.closePath(); cx.stroke();
+  pts.forEach(function(p){ cx.fillStyle='#fff'; cx.beginPath(); cx.arc(p.x,p.y,13,0,7); cx.fill(); cx.fillStyle='#0f766e'; cx.beginPath(); cx.arc(p.x,p.y,8,0,7); cx.fill(); });
+}
+function evPos(e){ var r=cvs.getBoundingClientRect(); return {x:e.clientX-r.left, y:e.clientY-r.top}; }
+cvs.addEventListener('pointerdown', function(e){
+  var m=evPos(e), best=-1, bd=1e9; cp.corners.forEach(function(q,i){ var v=toView(q), d=Math.hypot(v.x-m.x,v.y-m.y); if(d<bd){bd=d;best=i;} });
+  if (bd<44){ drag=best; cvs.setPointerCapture(e.pointerId); }
+});
+cvs.addEventListener('pointermove', function(e){
+  if (drag<0) return; var m=evPos(e), s=cp.p.src;
+  cp.corners[drag]={x:Math.max(0,Math.min(s.width,(m.x-view.ox)/view.s)), y:Math.max(0,Math.min(s.height,(m.y-view.oy)/view.s))}; drawCrop();
+});
+cvs.addEventListener('pointerup', function(){ drag=-1; });
+cvs.addEventListener('pointercancel', function(){ drag=-1; });
+window.addEventListener('resize', function(){ if (cp && $('crop').classList.contains('open')){ resizeCrop(); drawCrop(); } });
+$('cReset').onclick=function(){ var s=cp.p.src; cp.corners=[{x:0,y:0},{x:s.width,y:0},{x:s.width,y:s.height},{x:0,y:s.height}]; drawCrop(); };
+$('cAuto').onclick=function(){ var a=autoDetect(cp.p.src); if(a){cp.corners=a;drawCrop();toast('จับขอบแล้ว — ลากมุมปรับได้');} else toast('จับขอบอัตโนมัติไม่ได้ ลากมุมเองนะครับ'); };
+$('cCancel').onclick=function(){ $('crop').classList.remove('open'); cp=null; };
+$('cOk').onclick=function(){ cp.p.corners=cp.corners; $('crop').classList.remove('open'); cp=null; renderList(); };
+
+// ───────── ส่งออก ─────────
+$('seg').onclick=function(e){
+  var b=e.target.closest('button'); if(!b) return; outFmt=b.dataset.f;
+  [].forEach.call($('seg').children,function(x){x.classList.toggle('on',x===b);});
+  var pdf=outFmt==='pdf'; $('pdfopt').style.display=pdf?'':'none'; $('paper').style.display=pdf?'':'none';
+};
+function canvasToJpegBytes(cv, q){
+  return new Promise(function(res){ cv.toBlob(function(b){ b.arrayBuffer().then(function(ab){ res({bytes:new Uint8Array(ab), blob:b, w:cv.width, h:cv.height}); }); }, 'image/jpeg', q); });
+}
+function buildPdf(jpgs, paper){ // jpgs: [{bytes,w,h}] — PDF มาตรฐานเขียนเอง ไม่พึ่งไลบรารี
+  var enc=new TextEncoder(), chunks=[], offs=[], pos=0;
+  function put(x){ var b=(typeof x==='string')?enc.encode(x):x; chunks.push(b); pos+=b.length; }
+  function obj(n){ offs[n]=pos; put(n+' 0 obj\n'); }
+  var n=jpgs.length, objCount=2+n*3;
+  put('%PDF-1.4\n%\xE2\xE3\xCF\xD3\n');
+  obj(1); put('<< /Type /Catalog /Pages 2 0 R >>\nendobj\n');
+  var kids=[]; for (var i=0;i<n;i++) kids.push((3+i*3)+' 0 R');
+  obj(2); put('<< /Type /Pages /Kids [ '+kids.join(' ')+' ] /Count '+n+' >>\nendobj\n');
+  jpgs.forEach(function(j,i){
+    var pg=3+i*3, ct=pg+1, im=pg+2, pw, ph, dw, dh, dx, dy;
+    if (paper==='a4'){ var land=j.w>j.h; pw=land?842:595; ph=land?595:842; var s=Math.min((pw-24)/j.w,(ph-24)/j.h); dw=j.w*s; dh=j.h*s; dx=(pw-dw)/2; dy=(ph-dh)/2; }
+    else { pw=j.w*0.75; ph=j.h*0.75; dw=pw; dh=ph; dx=0; dy=0; }
+    obj(pg); put('<< /Type /Page /Parent 2 0 R /MediaBox [0 0 '+pw.toFixed(2)+' '+ph.toFixed(2)+'] /Resources << /XObject << /Im'+i+' '+im+' 0 R >> >> /Contents '+ct+' 0 R >>\nendobj\n');
+    var cs='q '+dw.toFixed(2)+' 0 0 '+dh.toFixed(2)+' '+dx.toFixed(2)+' '+dy.toFixed(2)+' cm /Im'+i+' Do Q';
+    obj(ct); put('<< /Length '+cs.length+' >>\nstream\n'+cs+'\nendstream\nendobj\n');
+    obj(im); put('<< /Type /XObject /Subtype /Image /Width '+j.w+' /Height '+j.h+' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length '+j.bytes.length+' >>\nstream\n'); put(j.bytes); put('\nendstream\nendobj\n');
+  });
+  var xref=pos; put('xref\n0 '+(objCount+1)+'\n0000000000 65535 f \n');
+  for (var k=1;k<=objCount;k++) put(('0000000000'+offs[k]).slice(-10)+' 00000 n \n');
+  put('trailer\n<< /Size '+(objCount+1)+' /Root 1 0 R >>\nstartxref\n'+xref+'\n%%EOF\n');
+  return new Blob(chunks, {type:'application/pdf'});
+}
+function stamp(){ var d=new Date(), z=function(x){return ('0'+x).slice(-2);}; return d.getFullYear()+z(d.getMonth()+1)+z(d.getDate())+'_'+z(d.getHours())+z(d.getMinutes())+z(d.getSeconds()); }
+function download(file){ var a=document.createElement('a'); a.href=URL.createObjectURL(file); a.download=file.name; document.body.appendChild(a); a.click(); setTimeout(function(){URL.revokeObjectURL(a.href); a.remove();},4000); }
+// ───────── ส่งเข้าโฟลเดอร์บนคอม (ต้องเปิดหน้านี้ผ่าน DocScan server: ลิงก์จากหน้า /admin บนคอม) ─────────
+var pcKey = (function(){ try { var k=new URLSearchParams(location.search).get('k'); if(k){ localStorage.setItem('docscan_key',k); } return localStorage.getItem('docscan_key')||''; } catch(e){ return ''; } })();
+var pcOk = false;
+async function pcProbe(){
+  if (!/^https?:$/.test(location.protocol)) return;
+  try {
+    var r = await fetch('/api/info', {cache:'no-store'}); var j = await r.json();
+    if (j && j.ok){ pcOk = true; $('destRow').style.display=''; $('destInfo').style.display=''; $('destInfo').textContent = 'โฟลเดอร์บนคอม: ' + j.dir + (pcKey ? '' : '  ⚠️ ยังไม่มีรหัส — เปิดลิงก์จากหน้า admin บนคอม'); }
+  } catch(e){}
+}
+async function sendToPc(files){
+  var saved=[], dir='';
+  for (var i=0;i<files.length;i++){
+    setStatus('กำลังส่งไฟล์ '+(i+1)+'/'+files.length+' เข้าคอม…');
+    var r = await fetch('/api/upload?name='+encodeURIComponent(files[i].name)+'&k='+encodeURIComponent(pcKey), {method:'POST', body:files[i]});
+    var j = await r.json();
+    if (!j.ok) throw new Error(j.error || ('ส่งไม่สำเร็จ (HTTP '+r.status+')'));
+    saved.push(j.saved); dir=j.dir;
+  }
+  return {saved:saved, dir:dir};
+}
+async function deliver(files){
+  if (navigator.canShare && navigator.canShare({files:files})){
+    try { await navigator.share({files:files}); return 'shared'; } catch(e){ if (e && e.name==='AbortError') return 'cancel'; }
+  }
+  files.forEach(download); return 'downloaded';
+}
+$('go').onclick=async function(){
+  if(!pages.length) return;
+  var btn=$('go'); btn.disabled=true; var q=parseFloat($('quality').value), t=stamp(), jp=[];
+  try {
+    for (var i=0;i<pages.length;i++){ setStatus('กำลังประมวลผลหน้า '+(i+1)+'/'+pages.length+'…'); await new Promise(function(r){setTimeout(r,20);}); var cv=await renderPageFull(pages[i]); jp.push(await canvasToJpegBytes(cv, q)); cv.width=cv.height=0; }
+    var files;
+    if (outFmt==='pdf'){ setStatus('กำลังสร้าง PDF…'); files=[new File([buildPdf(jp, $('paper').value)], 'scan_'+t+'.pdf', {type:'application/pdf'})]; }
+    else files=jp.map(function(j,i){ return new File([j.blob], 'scan_'+t+'_'+(i+1)+'.jpg', {type:'image/jpeg'}); });
+    var mb=(files.reduce(function(a,f){return a+f.size;},0)/1048576).toFixed(2);
+    if (pcOk && $('dest').value==='pc'){
+      var pr=await sendToPc(files);
+      setStatus('✅ ส่งเข้าคอมแล้ว '+pr.saved.length+' ไฟล์ · '+mb+' MB → '+pr.dir);
+      toast('บันทึกที่คอม: '+pr.dir, 3500);
+    } else {
+      var r=await deliver(files);
+      setStatus(r==='cancel' ? 'ยกเลิกการแชร์' : (r==='shared' ? 'แชร์แล้ว' : 'ดาวน์โหลดแล้ว')+' · '+files.length+' ไฟล์ · '+mb+' MB');
+    }
+    window._lastFiles=files;
+  } catch(e){ setStatus('เกิดข้อผิดพลาด: '+e.message); }
+  btn.disabled=!pages.length;
+};
+renderList();
+pcProbe();
+if (/Line\//i.test(navigator.userAgent)) $('lineWarn').style.display='';
+</script>
+</body>
+</html>
